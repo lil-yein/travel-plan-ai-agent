@@ -52,6 +52,19 @@ class PlanRequest(BaseModel):
     recursion_limit: int = 25
 
 
+@app.get("/")
+def root():
+    return {
+        "service": "Travel Plan AI Agent",
+        "status": "running",
+        "endpoints": {
+            "POST /plan": "여행 계획 생성 — body: {\"people\": [...]}",
+            "GET /health": "헬스체크",
+            "GET /docs": "대화형 API 문서 (Swagger UI)",
+        },
+    }
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
