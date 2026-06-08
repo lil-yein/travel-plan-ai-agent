@@ -14,6 +14,55 @@ cp .env.example .env        # ANTHROPIC_API_KEY 만 채우면 핵심 흐름이 �
 python run.py
 ```
 
+## 웹으로 공개하기 (Railway 백엔드 + Vercel 프론트)
+
+이 에이전트는 리서치 단계에서 외부 API를 여러 번 순차 호출하므로 한 번 실행에
+수십 초~몇 분이 걸릴 수 있다. Vercel 서버리스 함수는 요청 타임아웃(Hobby 10초)이
+있어 풀 실행이 끊길 수 있으므로, **에이전트는 타임아웃이 없는 상시 서버(Railway 등)에**
+두고 프론트만 Vercel에 두는 구성을 권장한다.
+
+### 1) 백엔드 — Railway에 배포
+
+`server.py` 가 LangGraph 그래프를 HTTP API로 감싼다.
+
+- `POST /plan` — `people` 리스트를 받아 에이전트를 돌리고 결과 JSON 반환
+- `GET /health` — 헬스체크
+
+```bash
+# 로컬에서 먼저 돌려보기
+pip install -r requirements.txt
+cp .env.example .env        # ANTHROPIC_API_KEY 채우기
+uvicorn server:app --reload --port 8000
+# 다른 터미널에서:
+curl -X POST localhost:8000/plan -H 'content-type: application/json' \
+  -d '{"people":[{"name":"Yein","available_dates":["2026-10-03 ~ 2026-10-12"],"budget":1500000,"energy_level":"medium","wishes":["맛집"],"departure_city":"Seoul"}]}'
+```
+
+Railway 배포: [railway.app](https://railway.app) → New Project → Deploy from GitHub repo →
+이 레포 선택. Railway가 `Procfile`(`uvicorn server:app ...`)을 자동 인식한다.
+대시보드 **Variables** 에 `ANTHROPIC_API_KEY`(필수)와 선택 키들을 넣고,
+`ALLOWED_ORIGINS=https://your-app.vercel.app` 로 CORS를 프론트 도메인으로 좁힌다.
+배포되면 `https://...up.railway.app` 공개 URL이 나온다.
+
+> Render/Fly.io도 동일하게 `Procfile`을 쓰면 된다. Render 무료 티어는 15분 유휴 시
+> 슬립(다음 요청 콜드스타트 ~30초)되는 점만 다르다.
+
+### 2) 프론트 — Vercel
+
+Next.js(또는 정적 페이지)에서 입력 폼을 만들고 위 URL로 `fetch`:
+
+```js
+const res = await fetch("https://your-backend.up.railway.app/plan", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ people }),
+});
+const plan = await res.json();
+```
+
+Vercel 환경변수에 백엔드 URL을 넣고, 실행 중에는 로딩 상태를 보여주면 된다
+(상시 서버라 오래 걸려도 끊기지 않는다).
+
 ## 비용 — 거의 다 무료
 
 | 도구 | API | 비용 |
@@ -40,7 +89,8 @@ agent/
   routing.py  조건 분기 라우터
   graph.py    그래프 조립 + 컴파일
 tools/        weather, geo, places, routing_tool, flights, vibe, reddit
-run.py        샘플 입력으로 실행
+run.py        샘플 입력으로 CLI 실행
+server.py     FastAPI — 같은 그래프를 HTTP API(/plan)로 노출 (웹 배포용)
 ```
 
 ## 흐름
