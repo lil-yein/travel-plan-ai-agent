@@ -9,7 +9,9 @@ Railway/Fly.io/Render 같은 '항상 켜진' 서버에 배포하면 서버리스
 로컬 실행:
   uvicorn server:app --reload --port 8000
 """
+import logging
 import os
+import traceback
 
 from dotenv import load_dotenv
 
@@ -17,7 +19,11 @@ load_dotenv()  # .env 읽기 (반드시 그래프 import 전)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("travel-agent")
 
 from agent.graph import build_travel_agent
 
@@ -78,7 +84,15 @@ def plan(req: PlanRequest):
         "messages": [],
         "negotiate_attempts": 0,
     }
-    final = _agent.invoke(initial, {"recursion_limit": req.recursion_limit})
+    try:
+        final = _agent.invoke(initial, {"recursion_limit": req.recursion_limit})
+    except Exception as e:  # noqa: BLE001 — 셋업 단계 디버깅용: 실제 에러를 노출
+        logger.exception("agent invoke failed")
+        return JSONResponse(
+            status_code=500,
+            content={"error": type(e).__name__, "detail": str(e),
+                     "trace": traceback.format_exc().splitlines()[-8:]},
+        )
 
     return {
         "chosen_dates": final.get("chosen_dates"),
