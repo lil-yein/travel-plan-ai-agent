@@ -102,8 +102,10 @@ def coordinate_destinations(state: TripState) -> dict:
 
 규칙: 최저 예산자도 감당 가능 / 피로도 low 있으면 빡센 일정 회피 /
 모두의 희망 최소 하나씩 충족.
+geo 는 지오코딩용 영문 "도시, 국가" (예: "Fukuoka, Japan") — 한글 지명은
+엉뚱한 좌표가 나오므로 반드시 영문+국가로.
 JSON 배열로만 답해 (설명·코드펜스 금지):
-[{{"destination":"도시명","why":"이유","tradeoffs":"단점"}}]"""
+[{{"destination":"도시명(한글)","geo":"City, Country(영문)","why":"이유","tradeoffs":"단점"}}]"""
 
     candidates = ask_llm_json(prompt, fallback=[])
     return {
@@ -161,8 +163,10 @@ def choose_destination(state: TripState) -> dict:
     if not candidates:
         return {"messages": [{"role": "system", "content": "후보 없음"}]}
 
-    chosen = candidates[0]["destination"]
-    geo = geocode(chosen)  # 버그4 수정: 좌표 동적 조회
+    top = candidates[0]
+    chosen = top["destination"]
+    # 한글 지명은 Nominatim이 엉뚱한 곳을 잡으므로 영문 "City, Country"로 조회.
+    geo = geocode(top.get("geo") or chosen)
     coords = {"lat": geo["lat"], "lon": geo["lon"]} if geo.get("success") else {}
     return {
         "chosen_destination": chosen,
